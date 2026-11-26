@@ -12,8 +12,9 @@ Yêu cầu: JDK 17+ (JDK 21 càng tốt), Maven, MySQL 8 / MariaDB.
 # 1) CSDL
 mysql -u root -p < db/schema.sql
 
-# 2) Chứng chỉ TLS (chạy 1 lần, ở thư mục gốc dự án). Server dùng server.jks, mọi Client dùng client-trust.jks
-bash scripts/gen-cert.sh          # Windows: chạy các lệnh keytool trong file này bằng tay
+# 2) Chứng chỉ TLS: TỰ DÒ IP máy hiện tại, chạy lại được. Server dùng server.jks, mọi Client dùng client-trust.jks
+bash scripts/gen-cert.sh          # Windows PowerShell: .\scripts\gen-cert.bat
+#    Tường lửa Windows (chạy 1 lần, chuột phải -> Run as administrator): scripts\open-firewall.bat
 
 # 3) Sửa db.user / db.password trong server.properties, rồi:
 mvn -q install -DskipTests
