@@ -4,6 +4,7 @@ import com.zalo.common.Framing;
 import com.zalo.common.Packet;
 import com.zalo.common.Protocol;
 import com.zalo.server.db.UserDao;
+import com.zalo.server.util.ServerLog;
 import com.zalo.server.service.AuthService;
 import com.zalo.server.service.ConversationService;
 import com.zalo.server.service.FriendService;
@@ -19,6 +20,9 @@ import java.io.IOException;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.sql.SQLException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import javax.net.ssl.SSLException;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
@@ -33,7 +37,10 @@ public final class ClientHandler implements Runnable {
 
     private final Socket socket;
     private final BlockingQueue<Packet> outQ = new ArrayBlockingQueue<>(Protocol.OUT_QUEUE_CAPACITY);
+    private static final AtomicInteger ACTIVE = new AtomicInteger();
+    private static final AtomicLong PACKETS = new AtomicLong();
     private final long connectedAt = System.currentTimeMillis();
+    private volatile long lastActivity = System.currentTimeMillis();
     private DataInputStream in;
     private DataOutputStream out;
     private volatile int userId = -1;
@@ -45,6 +52,10 @@ public final class ClientHandler implements Runnable {
     }
 
     // ------------------------------------------------------------------ truy cập
+    public static int active() { return ACTIVE.get(); }
+    public static long packetsIn() { return PACKETS.get(); }
+    public long ageSec() { return (System.currentTimeMillis() - connectedAt) / 1000; }
+    public long idleSec() { return (System.currentTimeMillis() - lastActivity) / 1000; }
     public int userId() { return userId; }
     public boolean authenticated() { return userId > 0; }
     public int p2pPort() { return p2pPort; }
@@ -61,7 +72,7 @@ public final class ClientHandler implements Runnable {
     public boolean send(Packet p) {
         if (closed) return false;
         if (!outQ.offer(p)) {
-            System.err.println("[slow-consumer] user " + userId + " đầy hàng đợi -> ngắt");
+            ServerLog.info("slow-consumer", "user " + userId + " đầy hàng đợi -> ngắt");
             close();
             return false;
         }
@@ -89,7 +100,9 @@ public final class ClientHandler implements Runnable {
     @Override
     public void run() {
         try {
+            ACTIVE.incrementAndGet();
             socket.setTcpNoDelay(true);
+            socket.setKeepAlive(true);                       // thêm 1 lớp phát hiện kết nối chết ở tầng TCP
             in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
             out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
             Thread w = new Thread(this::writerLoop, "writer-" + socket.getRemoteSocketAddress());
@@ -103,12 +116,18 @@ public final class ClientHandler implements Runnable {
                     socket.setSoTimeout(remain);
                 }
                 Packet p = Framing.readPacket(in);
+                lastActivity = System.currentTimeMillis();
+                PACKETS.incrementAndGet();
                 boolean wasAuth = authenticated();
                 handle(p);
                 if (!wasAuth && authenticated()) socket.setSoTimeout(Protocol.HEARTBEAT_TIMEOUT_MS);
             }
         } catch (SocketTimeoutException e) {
-            System.out.println("[net] timeout (" + (authenticated() ? "heartbeat" : "AUTH") + ") user=" + userId);
+            ServerLog.info("net", authenticated()
+                    ? "user " + userId + " im lặng quá " + (Protocol.HEARTBEAT_TIMEOUT_MS / 1000) + "s (Heartbeat Timeout) -> ngắt, coi là Offline"
+                    : ip() + " không AUTH trong " + (Protocol.AUTH_TIMEOUT_MS / 1000) + "s -> ngắt");
+        } catch (SSLException e) {
+            ServerLog.info("tls", "bắt tay TLS lỗi từ " + ip() + ": " + e.getMessage() + " (Client dùng TCP thường hoặc chưa tin chứng chỉ?)");
         } catch (IOException e) {
             // Client ngắt kết nối / gói lỗi: bình thường
         } catch (RuntimeException e) {
@@ -132,6 +151,7 @@ public final class ClientHandler implements Runnable {
     }
 
     private void cleanup() {
+        ACTIVE.decrementAndGet();
         closed = true;
         outQ.offer(POISON);
         try { socket.close(); } catch (IOException ignored) { }
@@ -141,10 +161,10 @@ public final class ClientHandler implements Runnable {
             try {
                 UserDao.setOffline(uid, now);
             } catch (SQLException e) {
-                System.err.println("[db] setOffline: " + e.getMessage());
+                ServerLog.info("db", "setOffline lỗi: " + e.getMessage());
             }
             SessionManager.broadcastPresence(uid, false, now);
-            System.out.println("[net] user " + uid + " offline");
+            ServerLog.info("net", "user " + uid + " OFFLINE (phiên " + ageSec() + "s)");
         }
     }
 
@@ -205,7 +225,7 @@ public final class ClientHandler implements Runnable {
                 default -> sendError(Protocol.ERR_UNKNOWN_TYPE, "Không hỗ trợ: " + t, null);
             }
         } catch (SQLException e) {
-            System.err.println("[db] " + t + ": " + e.getMessage());
+            ServerLog.info("db", t + ": " + e.getMessage());
             sendError(Protocol.ERR_SERVER, "Lỗi cơ sở dữ liệu", p.str("clientMsgId"));
         } catch (RuntimeException e) {          // JSON thiếu trường / sai kiểu
             sendError(Protocol.ERR_BAD_REQUEST, "Gói tin không hợp lệ: " + e.getMessage(), p.str("clientMsgId"));

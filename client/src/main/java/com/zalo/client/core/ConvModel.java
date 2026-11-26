@@ -18,6 +18,7 @@ public final class ConvModel {
         public int userId;
         public String displayName, role;
         public boolean online;
+        public long lastSeen;
     }
 
     public final int id;
@@ -82,6 +83,7 @@ public final class ConvModel {
             m.displayName = MsgModel.str(x, "displayName");
             m.role = MsgModel.str(x, "role");
             m.online = x.get("online").getAsBoolean();
+            m.lastSeen = x.has("lastSeen") ? x.get("lastSeen").getAsLong() : 0;
             members.add(m);
         }
         if (o.has("lastMessage") && o.get("lastMessage").isJsonObject()) {

@@ -39,6 +39,7 @@ public final class ConversationService {
             x.addProperty("avatarUrl", m.avatarUrl());
             x.addProperty("role", m.role());
             x.addProperty("online", SessionManager.isOnline(m.userId()));
+            x.addProperty("lastSeen", m.lastSeen());
             ms.add(x);
         }
         o.add("members", ms);

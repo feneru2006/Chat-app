@@ -56,6 +56,16 @@ public final class UiUtil {
         return String.format("%.2f GB", b / 1073741824.0);
     }
 
+    /** "Hoạt động 5 phút trước" từ last_seen (Server Unix ms). */
+    public static String ago(long ms) {
+        if (ms <= 0) return "Ngoại tuyến";
+        long s = Math.max(0, (System.currentTimeMillis() - ms) / 1000);
+        if (s < 60) return "Vừa mới hoạt động";
+        if (s < 3600) return "Hoạt động " + (s / 60) + " phút trước";
+        if (s < 86400) return "Hoạt động " + (s / 3600) + " giờ trước";
+        return "Hoạt động " + (s / 86400) + " ngày trước";
+    }
+
     public static String duration(int sec) {
         return (sec / 60) + ":" + String.format("%02d", sec % 60);
     }

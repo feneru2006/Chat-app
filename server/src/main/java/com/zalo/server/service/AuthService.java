@@ -7,6 +7,7 @@ import com.zalo.server.db.UserDao;
 import com.zalo.server.net.ClientHandler;
 import com.zalo.server.net.SessionManager;
 import com.zalo.server.util.PasswordHasher;
+import com.zalo.server.util.ServerLog;
 
 import java.sql.SQLException;
 
@@ -45,6 +46,7 @@ public final class AuthService {
         int p2pPort = p.intVal("p2pPort", 0);
         UserDao.User u = username.isEmpty() ? null : UserDao.findByUsername(username);
         if (u == null || password == null || !PasswordHasher.verify(password, u.passwordHash())) {
+            ServerLog.info("auth", "đăng nhập sai: user='" + username + "' từ " + h.ip());
             h.sendAndClose(Packet.of(Protocol.AUTH_RESULT).put("ok", false).put("error", Protocol.ERR_BAD_CREDENTIALS));
             return;
         }
@@ -54,7 +56,7 @@ public final class AuthService {
         h.send(Packet.of(Protocol.AUTH_RESULT).put("ok", true).put("userId", u.id())
                 .put("displayName", u.displayName()).put("avatarUrl", u.avatarUrl()));
         SessionManager.broadcastPresence(u.id(), true, System.currentTimeMillis());
-        System.out.println("[auth] " + u.username() + " (id=" + u.id() + ") online từ " + h.ip() + ", p2pPort=" + p2pPort);
+        ServerLog.info("auth", u.username() + " (id=" + u.id() + ") online từ " + h.ip() + ", p2pPort=" + p2pPort);
     }
 
     private static String str(Packet p, String k) {
