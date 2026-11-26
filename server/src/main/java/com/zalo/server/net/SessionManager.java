@@ -3,6 +3,7 @@ package com.zalo.server.net;
 import com.zalo.common.Packet;
 import com.zalo.common.Protocol;
 import com.zalo.server.db.UserDao;
+import com.zalo.server.util.ServerLog;
 
 import java.sql.SQLException;
 import java.util.Collection;
@@ -18,6 +19,7 @@ public final class SessionManager {
     public static void register(int userId, ClientHandler h) {
         ClientHandler old = ONLINE.put(userId, h);
         if (old != null && old != h) {
+            ServerLog.info("session", "user " + userId + " đăng nhập thiết bị mới -> FORCE_LOGOUT phiên cũ");
             old.sendAndClose(Packet.of(Protocol.FORCE_LOGOUT)
                     .put("reason", "Tài khoản của bạn đã đăng nhập trên một thiết bị khác."));
         }
@@ -29,6 +31,23 @@ public final class SessionManager {
     }
 
     public static ClientHandler get(int userId) { return ONLINE.get(userId); }
+
+    public static Collection<ClientHandler> all() { return ONLINE.values(); }
+
+    public static int count() { return ONLINE.size(); }
+
+    /** Quản trị viên ngắt một người dùng (lệnh `kick`). */
+    public static boolean kick(int userId, String reason) {
+        ClientHandler h = ONLINE.get(userId);
+        if (h == null) return false;
+        h.sendAndClose(Packet.of(Protocol.FORCE_LOGOUT).put("reason", reason));
+        return true;
+    }
+
+    /** Tắt server: đóng mọi phiên. */
+    public static void closeAll() {
+        for (ClientHandler h : ONLINE.values()) h.close();
+    }
 
     public static boolean isOnline(int userId) { return ONLINE.containsKey(userId); }
 
@@ -48,7 +67,7 @@ public final class SessionManager {
                     .put("userId", userId).put("lastSeen", lastSeen);
             sendToMany(UserDao.contactIds(userId), p, userId);
         } catch (SQLException e) {
-            System.err.println("[presence] " + e.getMessage());
+            ServerLog.info("presence", "lỗi DB: " + e.getMessage());
         }
     }
 }

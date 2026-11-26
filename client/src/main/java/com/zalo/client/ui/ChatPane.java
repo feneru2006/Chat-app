@@ -181,7 +181,7 @@ public final class ChatPane extends BorderPane {
             s = conv.members.size() + " thành viên";
         } else {
             ConvModel.Member p = conv.peer(core.myId);
-            s = p != null && p.online ? "Đang hoạt động • kênh: " + (core.p2pConnected(conv) ? "P2P trực tiếp" : "qua Server") : "Ngoại tuyến";
+            s = p != null && p.online ? "Đang hoạt động • kênh: " + (core.p2pConnected(conv) ? "P2P trực tiếp" : "qua Server") : (p == null ? "Ngoại tuyến" : UiUtil.ago(p.lastSeen));
         }
         sub.setText(s);
         olderBtn.setVisible(conv.hasMore && conv.historyLoaded);

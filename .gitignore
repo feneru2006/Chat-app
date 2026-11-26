@@ -10,6 +10,8 @@ downloads/
 target/
 *.jar
 *.war
+*.log
+*.jks
 *.zip
 .mvn/
 .idea/
@@ -23,6 +25,8 @@ target/
 *.jar
 *.war
 *.zip
+*.log
+*.jks
 .mvn/
 .idea/
 *.iml

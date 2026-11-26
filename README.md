@@ -4,14 +4,17 @@ Bám theo `docs/Dac_Ta_Ky_Thuat_Do_An_Lap_Trinh_Mang_Zalo_v4.1.docx`.
 Maven đa module: `common` (Framing, Packet, Protocol) · `server` · `client` (JavaFX).
 
 ## 1. Chạy thử
-Yêu cầu: JDK 25 (LTS) trở lên, Maven, MySQL 8 / MariaDB.
+Cách nhanh sau khi đã có CSDL + chứng chỉ (bước 1-3 bên dưới): `bash scripts/run-server.sh` / `scripts\run-server.bat` và `scripts/run-client.sh` / `scripts\run-client.bat` (mỗi script tự build rồi chạy).
+
+Yêu cầu: JDK 17+ (JDK 21 càng tốt), Maven, MySQL 8 / MariaDB.
 
 ```bash
 # 1) CSDL
 mysql -u root -p < db/schema.sql
 
-# 2) Chứng chỉ TLS (chạy 1 lần, ở thư mục gốc dự án). Server dùng server.jks, mọi Client dùng client-trust.jks
-bash scripts/gen-cert.sh          # Windows: chạy các lệnh keytool trong file này bằng tay
+# 2) Chứng chỉ TLS: TỰ DÒ IP máy hiện tại, chạy lại được. Server dùng server.jks, mọi Client dùng client-trust.jks
+bash scripts/gen-cert.sh          # Windows PowerShell: .\scripts\gen-cert.bat
+#    Tường lửa Windows (chạy 1 lần, chuột phải -> Run as administrator): scripts\open-firewall.bat
 
 # 3) Sửa db.user / db.password trong server.properties, rồi:
 mvn -q install -DskipTests
@@ -37,6 +40,9 @@ Kiểm tra nhanh lõi giao thức (không cần DB/mạng):
 | **TV3** Binary: File/Image/Video/Sound | File, Image, Video, Sound | `service/MediaService`, `MediaServer`, `util/Thumbnailer`, `client/net/MediaClient`, `media/AudioRecorder`, `ChatPane` (imageNode/videoNode/soundNode/fileNode) |
 | **TV4** DB, History, Emoji, Time | History, Emoji, Time | `db/*Dao`, `db/schema.sql`, `MessageService.sync/older`, `UiUtil.time` |
 | **TV5** Client mạng + Sender + Test | Sender, Framing, Outbox | `common/Framing`, `client/net/NetworkService`, `ChatPane` (Sender), `LoginView`, `MainView` |
+
+## 2b. Thành viên 1 (đã hoàn thiện)
+Xem `docs/TV1_Demo_va_Bao_cao.md`: log file, lệnh quản trị (`list`/`kick`/`stats`/`quit`), giới hạn kết nối, tắt server êm, `TestClient` để demo TC-04/TC-07, `gen-cert.bat` cho Windows.
 
 ## 3. Đã làm sẵn (khung chạy được theo đặc tả)
 - Packet Framing 4-byte + readFully; Server **đã biên dịch & tự kiểm tra** (TC-02 mô phỏng cắt/dính gói: PASS).

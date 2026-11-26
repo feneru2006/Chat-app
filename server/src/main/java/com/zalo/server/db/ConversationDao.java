@@ -13,7 +13,7 @@ public final class ConversationDao {
     private ConversationDao() {}
 
     public record Conv(int id, String type, String groupName, String groupAvatar, Long lastMessageId, long updatedAt) {}
-    public record MemberInfo(int userId, String displayName, String avatarUrl, String role, boolean online) {}
+    public record MemberInfo(int userId, String displayName, String avatarUrl, String role, boolean online, long lastSeen) {}
     /** Hai mốc của một thành viên: dùng để suy ra Đã nhận / Đã xem (xem MessageStateCalc). */
     public record MemberState(int userId, long delivered, long read) {}
 
@@ -55,13 +55,13 @@ public final class ConversationDao {
     }
 
     public static List<MemberInfo> members(int conv) throws SQLException {
-        String sql = "SELECT u.user_id,u.display_name,u.avatar_url,cm.role,u.is_online FROM ConversationMembers cm "
+        String sql = "SELECT u.user_id,u.display_name,u.avatar_url,cm.role,u.is_online,u.last_seen FROM ConversationMembers cm "
                 + "JOIN Users u ON u.user_id=cm.user_id WHERE cm.conversation_id=? ORDER BY cm.joined_at";
         List<MemberInfo> list = new ArrayList<>();
         try (Connection c = Db.get(); PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, conv);
             try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) list.add(new MemberInfo(rs.getInt(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getBoolean(5)));
+                while (rs.next()) list.add(new MemberInfo(rs.getInt(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getBoolean(5), rs.getLong(6)));
             }
         }
         return list;

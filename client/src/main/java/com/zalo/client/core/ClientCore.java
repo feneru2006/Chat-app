@@ -143,7 +143,7 @@ public final class ClientCore {
                 case Protocol.HISTORY_CLEARED -> onHistoryCleared(p);
                 case Protocol.MSG_REACTION -> onReaction(p);
                 case Protocol.TYPING -> onTyping(p.intVal("conversationId", -1), p.intVal("userId", -1), p.boolVal("typing", true));
-                case Protocol.USER_ONLINE, Protocol.USER_OFFLINE -> onPresence(p.intVal("userId", -1), Protocol.USER_ONLINE.equals(t));
+                case Protocol.USER_ONLINE, Protocol.USER_OFFLINE -> onPresence(p.intVal("userId", -1), Protocol.USER_ONLINE.equals(t), p.longVal("lastSeen", 0));
                 case Protocol.P2P_PEER_INFO -> onPeerInfo(p);
                 case Protocol.FILE_READY -> onFileReady(p);
                 case Protocol.FILE_DOWNLOAD_READY -> onDownloadReady(p);
@@ -298,12 +298,13 @@ public final class ClientCore {
         }
     }
 
-    private void onPresence(int userId, boolean online) {
+    private void onPresence(int userId, boolean online, long lastSeen) {
         for (ConvModel c : convs.values()) {
             ConvModel.Member m = c.member(userId);
-            if (m != null) m.online = online;
+            if (m != null) { m.online = online; if (lastSeen > 0) m.lastSeen = lastSeen; }
         }
         ui.onConvListChanged();
+        for (ConvModel c : convs.values()) if (c.member(userId) != null) ui.onConvChanged(c.id);
         if (online && userId > myId) return;                    // phía lớn đợi phía nhỏ gọi
         if (online) net.send(Packet.of(Protocol.P2P_LOOKUP).put("targetUserId", userId));
     }
