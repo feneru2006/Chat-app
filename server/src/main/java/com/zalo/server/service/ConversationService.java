@@ -46,10 +46,8 @@ public final class ConversationService {
         if ("GROUP".equals(c.type())) {
             o.addProperty("groupName", c.groupName());
         }
-        if (c.lastMessageId() != null) {
-            MessageDao.Msg last = MessageDao.findById(c.lastMessageId());
-            if (last != null) o.add("lastMessage", MessageService.toJson(last, new HashMap<>()));
-        }
+        MessageDao.Msg last = MessageDao.latestVisible(viewer, convId);
+        if (last != null) o.add("lastMessage", MessageService.toJson(last, new HashMap<>()));
         o.add("memberStates", MessageService.memberStates(convId));
         return o;
     }

@@ -46,6 +46,8 @@ Xem `docs/TV1_Demo_va_Bao_cao.md`: log file, lệnh quản trị (`list`/`kick`/
 
 #### 2d. Thành viên 3 (đã hoàn thiện)
 Xem `docs/TV3_Demo_va_Bao_cao.md`: kiểm tra định dạng tệp hợp lệ theo loại (`isValidExtension`), tự động trích xuất khung hình đầu tiên làm ảnh bìa Video (kết hợp JCodec phía Server và JavaFX snapshot + bộ nhớ đệm `VIDEO_THUMBS` phía Client), thêm thanh kéo tua tiến trình (`Slider`) cho cả Video và Tin nhắn thoại (`SOUND`), và khóa chống mở trùng nhiều cửa sổ phát Video (`activeVideoStage`).
+## 2c. Thành viên 4 — DB, History, Emoji, Time
+Xem `docs/TV4_Demo_va_Bao_cao.md`: thiết kế 8 bảng, truy xuất history offline/pagination, UTF-8 Emoji 4-byte, đồng bộ mốc thời gian Server và kịch bản demo/vấn đáp.
 
 ## 3. Đã làm sẵn (khung chạy được theo đặc tả)
 - Packet Framing 4-byte + readFully; Server **đã biên dịch & tự kiểm tra** (TC-02 mô phỏng cắt/dính gói: PASS).

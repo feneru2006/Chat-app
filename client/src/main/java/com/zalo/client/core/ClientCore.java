@@ -534,13 +534,22 @@ public final class ClientCore {
         return null;
     }
 
+    private void refreshPreview(ConvModel c) {
+        if (c.messages.isEmpty()) {
+            c.preview = "";
+            return;
+        }
+        MsgModel last = c.messages.get(c.messages.size() - 1);
+        c.preview = ("SYSTEM".equals(last.type) || last.senderId != myId ? "" : "Bạn: ") + last.preview();
+    }
+
     private void onRecalled(Packet p) {
         ConvModel c = convs.get(p.intVal("conversationId", -1));
         if (c == null) return;
         MsgModel m = byId(c, p.longVal("messageId", -1));
         if (m != null) {
             m.recalled = true;
-            if (m == c.messages.get(c.messages.size() - 1)) c.preview = m.preview();
+            if (m == c.messages.get(c.messages.size() - 1)) refreshPreview(c);
         }
         c.changeKind = ConvModel.KIND_REFRESH;
         ui.onConvChanged(c.id);
@@ -551,7 +560,11 @@ public final class ClientCore {
         ConvModel c = convs.get(p.intVal("conversationId", -1));
         if (c == null) return;
         MsgModel m = byId(c, p.longVal("messageId", -1));
-        if (m != null) c.messages.remove(m);
+        if (m != null) {
+            c.messages.remove(m);
+            refreshPreview(c);
+            ui.onConvListChanged();
+        }
         c.changeKind = ConvModel.KIND_REFRESH;
         ui.onConvChanged(c.id);
     }
