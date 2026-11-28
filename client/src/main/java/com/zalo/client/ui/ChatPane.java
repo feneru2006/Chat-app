@@ -18,6 +18,7 @@ import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.Slider;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.ProgressBar;
@@ -36,6 +37,8 @@ import javafx.scene.layout.VBox;
 import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
 import javafx.scene.media.MediaView;
+import javafx.scene.SnapshotParameters;
+import javafx.scene.image.WritableImage;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.util.Duration;
@@ -63,6 +66,8 @@ public final class ChatPane extends BorderPane {
     private final EmojiPicker emoji;
     private final AudioRecorder recorder = new AudioRecorder();
     private boolean recording;
+    private Stage activeVideoStage; 
+    private static final Map<String, Image> VIDEO_THUMBS = new java.util.concurrent.ConcurrentHashMap<>();
 
     // Đang soạn tin: debounce 500ms mới báo "đang gõ", 3s không gõ thì báo "ngừng".
     private final PauseTransition debounce = new PauseTransition(Duration.millis(500));
@@ -434,47 +439,233 @@ public final class ChatPane extends BorderPane {
         return sp;
     }
 
-    /** Video: ảnh bìa + nút Play; bấm vào mới tải về và mở trình phát. */
+/** Video: tự động trích khung hình đầu làm ảnh bìa (có Cache) + chống mở trùng nhiều cửa sổ. */
     private Node videoNode(MsgModel m) {
+        ImageView thumbView = new ImageView();
+        thumbView.setPreserveRatio(true);
+        thumbView.setFitWidth(240);
+        thumbView.setFitHeight(135);
+
         Label play = new Label("▶");
-        play.setStyle("-fx-text-fill:white;-fx-font-size:38px;");
+        play.setStyle("-fx-text-fill:white;-fx-font-size:34px;-fx-background-color:rgba(0,0,0,0.45);-fx-padding:4 14;-fx-background-radius:30;");
         Label name = new Label(m.fileName() + " (" + UiUtil.size(m.fileSize()) + ")");
-        name.setStyle("-fx-text-fill:#ddd;-fx-font-size:11px;");
-        VBox cover = new VBox(6, play, name);
-        cover.setAlignment(Pos.CENTER);
+        name.setStyle("-fx-text-fill:white;-fx-font-size:11px;-fx-background-color:rgba(0,0,0,0.55);-fx-padding:2 6;-fx-background-radius:4;");
+        name.setMaxWidth(228);
+
+        VBox overlay = new VBox(8, play, name);
+        overlay.setAlignment(Pos.CENTER);
+
+        StackPane cover = new StackPane(thumbView, overlay);
         cover.setPrefSize(240, 135);
         cover.setStyle("-fx-background-color:#222;-fx-background-radius:8;-fx-cursor:hand;");
-        // TODO (TV3): thay ảnh bìa bằng khung hình đầu tiên (JavaCV FFmpegFrameGrabber) nếu còn thời gian.
-        cover.setOnMouseClicked(e -> core.fetch(m, false, f -> {
-            if (f == null) return;
-            Media media = new Media(f.toURI().toString());
-            MediaPlayer mp = new MediaPlayer(media);
-            MediaView mv = new MediaView(mp);
-            mv.setFitWidth(720);
-            mv.setPreserveRatio(true);
-            Stage st = new Stage();
-            st.setTitle(m.fileName());
-            st.setScene(new Scene(new StackPane(mv), 720, 420, javafx.scene.paint.Color.BLACK));
-            st.setOnHidden(ev -> mp.dispose());
-            mp.setAutoPlay(true);
-            st.show();
-        }));
+
+        // 1. Tải ảnh bìa từ Cache hoặc trích xuất 1 lần duy nhất
+        loadVideoThumb(m, thumbView);
+
+        // 2. Chống bấm mở 2 lần cùng lúc
+        final boolean[] opening = {false};
+
+        cover.setOnMouseClicked(e -> {
+            if (opening[0]) return;
+            if (activeVideoStage != null && activeVideoStage.isShowing()) {
+                activeVideoStage.toFront();
+                return;
+            }
+            opening[0] = true;
+
+            core.fetch(m, false, f -> {
+                opening[0] = false;
+                if (f == null) return;
+
+                String key = (m.localFile != null && m.localFile.exists())
+                        ? m.localFile.getAbsolutePath()
+                        : "msg_" + m.id;
+                if (thumbView.getImage() == null) {
+                    grabFirstFrameJavaFX(key, f, thumbView);
+                }
+
+                Media media = new Media(f.toURI().toString());
+                MediaPlayer mp = new MediaPlayer(media);
+                MediaView mv = new MediaView(mp);
+                mv.setFitWidth(720);
+                mv.setPreserveRatio(true);
+
+                Button btnPlay = new Button("⏸");
+                Slider slider = new Slider(0, 100, 0);
+                HBox.setHgrow(slider, Priority.ALWAYS);
+                Label timeLbl = new Label("0:00 / 0:00");
+                timeLbl.setStyle("-fx-text-fill:white;-fx-font-size:12px;");
+
+                btnPlay.setOnAction(ev -> {
+                    if (mp.getStatus() == MediaPlayer.Status.PLAYING) {
+                        mp.pause();
+                        btnPlay.setText("▶");
+                    } else {
+                        mp.play();
+                        btnPlay.setText("⏸");
+                    }
+                });
+
+                mp.currentTimeProperty().addListener((obs, oldTime, newTime) -> {
+                    if (!slider.isValueChanging() && mp.getTotalDuration() != null && mp.getTotalDuration().toSeconds() > 0) {
+                        double pct = newTime.toSeconds() / mp.getTotalDuration().toSeconds() * 100.0;
+                        slider.setValue(pct);
+                        timeLbl.setText(UiUtil.duration((int) newTime.toSeconds()) + " / " + UiUtil.duration((int) mp.getTotalDuration().toSeconds()));
+                    }
+                });
+
+                slider.setOnMouseReleased(ev -> {
+                    if (mp.getTotalDuration() != null) {
+                        mp.seek(mp.getTotalDuration().multiply(slider.getValue() / 100.0));
+                    }
+                });
+
+                mp.setOnEndOfMedia(() -> {
+                    mp.seek(Duration.ZERO);
+                    mp.pause();
+                    btnPlay.setText("▶");
+                });
+
+                HBox controls = new HBox(10, btnPlay, slider, timeLbl);
+                controls.setAlignment(Pos.CENTER);
+                controls.setPadding(new Insets(8, 12, 8, 12));
+                controls.setStyle("-fx-background-color:#181818;");
+
+                BorderPane root = new BorderPane();
+                root.setCenter(new StackPane(mv));
+                root.setBottom(controls);
+                root.setStyle("-fx-background-color:black;");
+
+                Stage st = new Stage();
+                activeVideoStage = st;
+                st.setTitle(m.fileName());
+                st.setScene(new Scene(root, 720, 460));
+                st.setOnHidden(ev -> {
+                    mp.dispose();
+                    if (activeVideoStage == st) activeVideoStage = null;
+                });
+                mp.setAutoPlay(true);
+                st.show();
+            });
+        });
         return cover;
     }
 
-    /** Sound: nút ▶ + thời lượng; bấm để phát lại (Clip). */
+    /** Lấy ảnh bìa từ Cache trước; nếu chưa có mới giải mã 1 lần duy nhất và lưu vào Cache. */
+    private void loadVideoThumb(MsgModel m, ImageView thumbView) {
+        String key = (m.localFile != null && m.localFile.exists())
+                ? m.localFile.getAbsolutePath()
+                : "msg_" + m.id;
+
+        Image cached = VIDEO_THUMBS.get(key);
+        if (cached != null) {
+            thumbView.setImage(cached);
+            return;
+        }
+
+        if (m.localFile != null && m.localFile.exists()) {
+            grabFirstFrameJavaFX(key, m.localFile, thumbView);
+        } else if (m.hasThumb()) {
+            core.fetch(m, true, f -> {
+                if (f != null) {
+                    Image img = new Image(f.toURI().toString());
+                    VIDEO_THUMBS.put(key, img);
+                    thumbView.setImage(img);
+                }
+            });
+        } else if (m.id > 0) {
+            core.fetch(m, false, f -> {
+                if (f != null) grabFirstFrameJavaFX(key, f, thumbView);
+            });
+        }
+    }
+
+    /** Chờ MediaPlayer thực sự chạy qua mốc 120ms (GPU đã vẽ xong frame) mới chụp snapshot và lưu Cache. */
+    private void grabFirstFrameJavaFX(String cacheKey, File videoFile, ImageView target) {
+        Image existing = VIDEO_THUMBS.get(cacheKey);
+        if (existing != null) {
+            target.setImage(existing);
+            return;
+        }
+        try {
+            MediaPlayer tmpPlayer = new MediaPlayer(new Media(videoFile.toURI().toString()));
+            MediaView tmpView = new MediaView(tmpPlayer);
+            tmpView.setFitWidth(240);
+            tmpView.setPreserveRatio(true);
+            tmpPlayer.setMute(true);
+
+            final boolean[] captured = {false};
+            tmpPlayer.currentTimeProperty().addListener((obs, oldT, newT) -> {
+                if (!captured[0] && newT.toMillis() >= 120) {
+                    captured[0] = true;
+                    WritableImage snap = tmpView.snapshot(new SnapshotParameters(), null);
+                    if (snap != null && snap.getWidth() > 0) {
+                        VIDEO_THUMBS.put(cacheKey, snap);
+                        target.setImage(snap);
+                    }
+                    tmpPlayer.stop();
+                    tmpPlayer.dispose();
+                }
+            });
+
+            tmpPlayer.setOnReady(tmpPlayer::play);
+            tmpPlayer.setOnError(tmpPlayer::dispose);
+        } catch (Exception ignored) { }
+    }
+
+    /** Sound: nút ▶/⏸ + thanh kéo tua tiến trình trực tiếp trên bong bóng chat + thời lượng. */
     private Node soundNode(MsgModel m) {
         Button play = new Button("▶");
-        Label dur = new Label("Tin nhắn thoại  " + UiUtil.duration(m.durationSec()));
-        play.setOnAction(e -> core.fetch(m, false, f -> {
-            if (f == null) return;
-            try {
-                AudioRecorder.play(f);
-            } catch (Exception ex) {
-                main.toast("Không phát được âm thanh: " + ex.getMessage());
+        Slider slider = new Slider(0, 100, 0);
+        slider.setPrefWidth(130);
+        Label dur = new Label(UiUtil.duration(m.durationSec()));
+        dur.setStyle("-fx-font-size:12px;");
+
+        final MediaPlayer[] holder = new MediaPlayer[1];
+
+        play.setOnAction(e -> {
+            if (holder[0] != null) {
+                if (holder[0].getStatus() == MediaPlayer.Status.PLAYING) {
+                    holder[0].pause();
+                    play.setText("▶");
+                } else {
+                    holder[0].play();
+                    play.setText("⏸");
+                }
+                return;
             }
-        }));
-        HBox h = new HBox(8, play, dur);
+            core.fetch(m, false, f -> {
+                if (f == null) return;
+                MediaPlayer mp = new MediaPlayer(new Media(f.toURI().toString()));
+                holder[0] = mp;
+
+                mp.currentTimeProperty().addListener((obs, oldT, newT) -> {
+                    if (!slider.isValueChanging() && mp.getTotalDuration() != null && mp.getTotalDuration().toSeconds() > 0) {
+                        slider.setValue(newT.toSeconds() / mp.getTotalDuration().toSeconds() * 100.0);
+                        dur.setText(UiUtil.duration((int) newT.toSeconds()) + " / " + UiUtil.duration(m.durationSec()));
+                    }
+                });
+
+                slider.setOnMouseReleased(ev -> {
+                    if (mp.getTotalDuration() != null) {
+                        mp.seek(mp.getTotalDuration().multiply(slider.getValue() / 100.0));
+                    }
+                });
+
+                mp.setOnEndOfMedia(() -> {
+                    mp.seek(Duration.ZERO);
+                    mp.pause();
+                    play.setText("▶");
+                    slider.setValue(0);
+                    dur.setText(UiUtil.duration(m.durationSec()));
+                });
+
+                play.setText("⏸");
+                mp.play();
+            });
+        });
+
+        HBox h = new HBox(8, play, slider, dur);
         h.setAlignment(Pos.CENTER_LEFT);
         return h;
     }

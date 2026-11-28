@@ -34,3 +34,9 @@ target/
 .settings/
 .classpath
 .project
+
+claude.md
+*.jks
+storage/
+downloads/
+

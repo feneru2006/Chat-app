@@ -44,6 +44,9 @@ Kiểm tra nhanh lõi giao thức (không cần DB/mạng):
 ## 2b. Thành viên 1 (đã hoàn thiện)
 Xem `docs/TV1_Demo_va_Bao_cao.md`: log file, lệnh quản trị (`list`/`kick`/`stats`/`quit`), giới hạn kết nối, tắt server êm, `TestClient` để demo TC-04/TC-07, `gen-cert.bat` cho Windows.
 
+#### 2d. Thành viên 3 (đã hoàn thiện)
+Xem `docs/TV3_Demo_va_Bao_cao.md`: kiểm tra định dạng tệp hợp lệ theo loại (`isValidExtension`), tự động trích xuất khung hình đầu tiên làm ảnh bìa Video (kết hợp JCodec phía Server và JavaFX snapshot + bộ nhớ đệm `VIDEO_THUMBS` phía Client), thêm thanh kéo tua tiến trình (`Slider`) cho cả Video và Tin nhắn thoại (`SOUND`), và khóa chống mở trùng nhiều cửa sổ phát Video (`activeVideoStage`).
+
 ## 3. Đã làm sẵn (khung chạy được theo đặc tả)
 - Packet Framing 4-byte + readFully; Server **đã biên dịch & tự kiểm tra** (TC-02 mô phỏng cắt/dính gói: PASS).
 - TLS Kênh 1, AUTH ≤ 10s, **sender_id lấy từ phiên Socket**, Single Session (FORCE_LOGOUT), Heartbeat 20s/45s.

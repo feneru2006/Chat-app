@@ -139,8 +139,10 @@ public final class MediaServer {
         if (Protocol.MSG_IMAGE.equals(t.msgType)) {
             Path th = dir.resolve("thumb_" + base + ".jpg");
             if (Thumbnailer.create(dest, th)) thumbRel = storage.relativize(th).toString();
+        } else if (Protocol.MSG_VIDEO.equals(t.msgType)) {
+            Path th = dir.resolve("thumb_" + base + ".jpg");
+            if (Thumbnailer.createFromVideo(dest, th)) thumbRel = storage.relativize(th).toString();
         }
-        // TODO (Thành viên 3): Video -> trích khung hình đầu làm thumbnail (JavaCV) nếu còn thời gian; tạm dùng icon "play".
 
         long now = System.currentTimeMillis();
         Msg m;

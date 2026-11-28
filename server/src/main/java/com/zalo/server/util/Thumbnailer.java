@@ -8,6 +8,9 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Path;
+import org.jcodec.api.FrameGrab;
+import org.jcodec.common.model.Picture;
+import org.jcodec.scale.AWTUtil;
 
 /** Tạo ảnh thu nhỏ tối đa 300x300px (~20KB) cho tiêu chí Image. */
 public final class Thumbnailer {
@@ -30,6 +33,30 @@ public final class Thumbnailer {
             g.dispose();
             return ImageIO.write(th, "jpg", dest.toFile());
         } catch (IOException | RuntimeException e) {
+            return false;
+        }
+    }
+
+    /** Trích xuất khung hình đầu tiên của Video (.mp4) và nén thành ảnh bìa 300x300px (~20KB). */
+    public static boolean createFromVideo(Path videoSrc, Path dest) {
+        try {
+            System.setProperty("java.awt.headless", "true");
+            Picture pic = FrameGrab.getFrameFromFile(videoSrc.toFile(), 0);
+            if (pic == null) return false;
+            BufferedImage img = AWTUtil.toBufferedImage(pic);
+
+            double scale = Math.min(1.0, Math.min((double) Protocol.THUMB_MAX_PX / img.getWidth(),
+                    (double) Protocol.THUMB_MAX_PX / img.getHeight()));
+            int w = Math.max(1, (int) (img.getWidth() * scale));
+            int h = Math.max(1, (int) (img.getHeight() * scale));
+            BufferedImage th = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = th.createGraphics();
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.drawImage(img, 0, 0, w, h, java.awt.Color.WHITE, null);
+            g.dispose();
+            return ImageIO.write(th, "jpg", dest.toFile());
+        } catch (Exception e) {
+            System.err.println("[thumbnail] Lỗi trích xuất khung hình video: " + e.getMessage());
             return false;
         }
     }

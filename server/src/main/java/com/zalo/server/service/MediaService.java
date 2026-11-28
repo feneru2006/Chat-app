@@ -71,6 +71,10 @@ public final class MediaService {
             h.sendError(Protocol.ERR_TOO_LARGE, "File vượt quá giới hạn", cid);
             return;
         }
+        if (!isValidExtension(type, name)) {
+            h.sendError(Protocol.ERR_BAD_REQUEST, "Định dạng tệp không khớp với loại " + type, cid);
+            return;
+}
         if (!ConversationDao.isMember(conv, h.userId())) {
             h.sendError(Protocol.ERR_NOT_MEMBER, "Bạn không thuộc hội thoại này", cid);
             return;
@@ -111,4 +115,15 @@ public final class MediaService {
         h.send(Packet.of(Protocol.FILE_DOWNLOAD_READY).put("messageId", messageId).put("transferId", t.id)
                 .put("mediaPort", MediaServer.port()).put("thumb", thumb));
     }
+
+    private static boolean isValidExtension(String msgType, String fileName) {
+    String lower = fileName.toLowerCase();
+    return switch (msgType) {
+        case Protocol.MSG_IMAGE -> lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png");
+        case Protocol.MSG_VIDEO -> lower.endsWith(".mp4");
+        case Protocol.MSG_SOUND -> lower.endsWith(".wav");
+        case Protocol.MSG_FILE  -> true; // FILE chấp nhận mọi định dạng
+        default -> false;
+    };
+}
 }
