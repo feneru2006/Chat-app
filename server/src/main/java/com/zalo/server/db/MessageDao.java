@@ -85,6 +85,17 @@ public final class MessageDao {
         }
     }
 
+    /** Tin mới nhất mà một thành viên còn được xem, tôn trọng xóa riêng và xóa lịch sử. */
+    public static Msg latestVisible(int user, int conv) throws SQLException {
+        String sql = "SELECT m.*" + VISIBLE + "ORDER BY m.message_id DESC LIMIT 1";
+        try (Connection c = Db.get(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, user);
+            ps.setInt(2, conv);
+            ps.setInt(3, user);
+            try (ResultSet rs = ps.executeQuery()) { return rs.next() ? map(rs) : null; }
+        }
+    }
+
     public static long maxId(int conv) throws SQLException {
         try (Connection c = Db.get(); PreparedStatement ps = c.prepareStatement(
                 "SELECT COALESCE(MAX(message_id),0) FROM Messages WHERE conversation_id=?")) {

@@ -44,6 +44,9 @@ Kiểm tra nhanh lõi giao thức (không cần DB/mạng):
 ## 2b. Thành viên 1 (đã hoàn thiện)
 Xem `docs/TV1_Demo_va_Bao_cao.md`: log file, lệnh quản trị (`list`/`kick`/`stats`/`quit`), giới hạn kết nối, tắt server êm, `TestClient` để demo TC-04/TC-07, `gen-cert.bat` cho Windows.
 
+## 2c. Thành viên 4 — DB, History, Emoji, Time
+Xem `docs/TV4_Demo_va_Bao_cao.md`: thiết kế 8 bảng, truy xuất history offline/pagination, UTF-8 Emoji 4-byte, đồng bộ mốc thời gian Server và kịch bản demo/vấn đáp.
+
 ## 3. Đã làm sẵn (khung chạy được theo đặc tả)
 - Packet Framing 4-byte + readFully; Server **đã biên dịch & tự kiểm tra** (TC-02 mô phỏng cắt/dính gói: PASS).
 - TLS Kênh 1, AUTH ≤ 10s, **sender_id lấy từ phiên Socket**, Single Session (FORCE_LOGOUT), Heartbeat 20s/45s.

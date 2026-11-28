@@ -279,7 +279,9 @@ public final class ConversationDao {
 
     public static int unread(int conv, int user) throws SQLException {
         String sql = "SELECT COUNT(*) FROM Messages m JOIN ConversationMembers cm ON cm.conversation_id=m.conversation_id AND cm.user_id=? "
-                + "WHERE m.conversation_id=? AND m.message_id>cm.last_read_message_id AND m.message_id>cm.cleared_before_msg_id AND m.sender_id<>?";
+                + "WHERE m.conversation_id=? AND m.message_id>cm.last_read_message_id AND m.message_id>cm.cleared_before_msg_id "
+                + "AND m.sender_id<>? AND m.msg_type<>'SYSTEM' "
+                + "AND NOT EXISTS (SELECT 1 FROM MessageDeletions d WHERE d.message_id=m.message_id AND d.user_id=cm.user_id)";
         try (Connection c = Db.get(); PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, user);
             ps.setInt(2, conv);
