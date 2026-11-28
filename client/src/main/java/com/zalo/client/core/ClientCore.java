@@ -186,6 +186,7 @@ public final class ClientCore {
             JsonObject o = e.getAsJsonObject();
             ConvModel c = convs.computeIfAbsent(o.get("conversationId").getAsInt(), ConvModel::new);
             c.applyJson(o, myId);
+            ackInitialUnread(c, o);
             keep.add(c.id);
             if (visible(c)) c.unread = 0;
         }
@@ -198,11 +199,32 @@ public final class ClientCore {
         JsonObject o = p.object("conversation");
         ConvModel c = convs.computeIfAbsent(o.get("conversationId").getAsInt(), ConvModel::new);
         c.applyJson(o, myId);
+        ackInitialUnread(c, o);
         c.changeKind = ConvModel.KIND_REFRESH;
         ui.onConvListChanged();
         ui.onConvChanged(c.id);
         if (added && p.boolVal("opened", false)) ui.onOpenConversation(c.id);
         p2pLookupAll();
+    }
+
+    /** Vừa đăng nhập/tải danh sách hội thoại: nếu có tin chưa đọc thì gửi ACK_DELIVERED ngay cho Server. */
+    private void ackInitialUnread(ConvModel c, JsonObject o) {
+        if (c.unread <= 0) return;
+        long lastId = c.lastMessageId();
+        if (lastId <= 0 && o.has("lastMessageId") && !o.get("lastMessageId").isJsonNull()) {
+            lastId = o.get("lastMessageId").getAsLong();
+        }
+        if (lastId <= 0 && o.has("lastMessage") && o.get("lastMessage").isJsonObject()) {
+            JsonObject lm = o.getAsJsonObject("lastMessage");
+            if (lm.has("messageId") && !lm.get("messageId").isJsonNull()) {
+                lastId = lm.get("messageId").getAsLong();
+            }
+        }
+        if (lastId > 0) {
+            ackDelivered(c, lastId);
+        } else if (!c.historyLoaded && !c.loadingOlder) {
+            loadOlder(c); // tải batch tin mới nhất -> onOlderResult sẽ tự gửi ackDelivered (chưa MARK_AS_READ nếu chưa mở chat)
+        }
     }
 
     public void openConversation(int convId) {
